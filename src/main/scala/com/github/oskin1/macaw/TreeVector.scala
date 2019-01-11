@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 import com.github.oskin1.macaw.TreeVector.{Buffer, Chunk, Chunks, Concat}
 
-import scala.reflect.ClassTag
+import scala.collection.mutable.ArrayBuffer
 
 abstract sealed class TreeVector[+A] extends Serializable {
 
@@ -103,12 +103,14 @@ abstract sealed class TreeVector[+A] extends Serializable {
     */
   final def bufferBy(chunkSize: Int): TreeVector[A] = this match {
     case bf: Buffer[A@unchecked] => if (bf.lastChunk.length >= chunkSize) bf else bf.rebuffer(chunkSize)
-    case _ => Buffer(new AtomicLong(0), 0, this, new Array[A](chunkSize), 0)
+    case _ => Buffer(new AtomicLong(0), 0, this, new ArrayBuffer[A](chunkSize), 0)
   }
 
   /** Collapse any buffered chunks at the end of this vector in an unbuffered vector.
     */
   def unbuffer: TreeVector[A] = this
+
+  final def copy: TreeVector[A] = ???
 
   protected def get0(index: Int): A
 
@@ -127,7 +129,7 @@ object TreeVector {
     override def apply(index: Int) = throw new IllegalArgumentException("At empty view")
   }
 
-  private class AtArray[A](val arr: Array[A]) extends At[A] {
+  private class AtArray[A](val arr: ArrayBuffer[A]) extends At[A] {
     override def apply(index: Int): A = arr(index)
   }
 
@@ -157,28 +159,47 @@ object TreeVector {
   }
 
   /** Supports fast `:+` and `++` operations using an unobservable mutable
-    * scratch array at the end of the vector.
+    * scratch array buffer at the end of the vector.
     */
   private[macaw] case class Buffer[A](id: AtomicLong,
                                       stamp: Long,
                                       hd: TreeVector[A],
-                                      lastChunk: Array[A],
+                                      lastChunk: ArrayBuffer[A],
                                       lastSize: Int) extends TreeVector[A] {
 
     override def size: Int = hd.size + lastSize
 
     override def get0(index: Int): A = if (index < hd.size) hd.get0(index) else lastChunk(index - hd.size)
 
-    def lastElems: TreeVector[A] = ???
+    override def unbuffer: TreeVector[A] = {
+      // copy last chunk to a new vector if it is more than half unused to avoid proliferation of scratch space
+      val restElems = if (lastSize * 2 < lastChunk.length) lastElems.copy else lastElems
+      hd ++ restElems
+    }
 
-    def rebuffer(chunkSize: Int): TreeVector[A] = ???
+    def rebuffer(chunkSize: Int): TreeVector[A] = {
+      require(chunkSize > lastChunk.length)
+      val newChunk = new ArrayBuffer[A](chunkSize)
+      lastChunk.copyToBuffer(newChunk)
+      Buffer(new AtomicLong(0), 0, hd, newChunk, lastSize)
+    }
+
+    def lastElems: TreeVector[A] = TreeVector.view(lastChunk).take(lastSize)
 
   }
 
-  def apply[T](elems: T*): TreeVector[T] = ???
+  def apply[T](elems: T*): TreeVector[T] = {
+    val bf = new ArrayBuffer[T](elems.size)
+    var i = 0
+    elems.foreach { e =>
+      bf(i) = e
+      i += 1
+    }
+    view(bf)
+  }
 
   def empty[T]: TreeVector[T] = Chunk[T](View.empty)
 
-  def view[T](elems: Array[T]): TreeVector[T] = Chunk(View(new AtArray(elems), 0, elems.length))
+  def view[T](elems: ArrayBuffer[T]): TreeVector[T] = Chunk(View(new AtArray(elems), 0, elems.length))
 
 }
