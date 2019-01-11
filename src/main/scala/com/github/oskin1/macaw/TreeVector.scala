@@ -4,6 +4,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 import com.github.oskin1.macaw.TreeVector.{Buffer, Chunk, Chunks, Concat}
 
+import scala.reflect.ClassTag
+
 abstract sealed class TreeVector[+A] extends Serializable {
 
   /** Number of elements in this vector.
@@ -176,5 +178,7 @@ object TreeVector {
   def apply[T](elems: T*): TreeVector[T] = ???
 
   def empty[T]: TreeVector[T] = Chunk[T](View.empty)
+
+  def view[T](elems: Array[T]): TreeVector[T] = Chunk(View(new AtArray(elems), 0, elems.length))
 
 }
