@@ -4,9 +4,9 @@ import java.util.concurrent.atomic.AtomicLong
 
 import com.github.oskin1.macaw.TreeVector._
 
-import scala.collection.mutable.ArrayBuffer
+import scala.reflect.ClassTag
 
-abstract sealed class TreeVector[A] extends Serializable {
+abstract sealed class TreeVector[A : ClassTag] extends Serializable {
 
   /** Number of elements in this vector.
     */
@@ -72,7 +72,7 @@ abstract sealed class TreeVector[A] extends Serializable {
         case Chunk(elems) => accR.foldLeft(Chunk(elems.drop(rn)): TreeVector[A])(_ ++ _)
         case Concat(left, right) =>
           if (rn > left.size) loop(right, rn - left.size, accR) else loop(left, rn, right :: accR)
-        case bf: Buffer[A@unchecked] =>
+        case bf: Buffer[A] =>
           if (rn > bf.hd.size) loop(bf.lastElems, rn - bf.hd.size, accR) else loop(bf.hd, rn, bf.lastElems :: accR)
         case Chunks(chunks) => loop(chunks, rn, accR)
       }
@@ -91,7 +91,7 @@ abstract sealed class TreeVector[A] extends Serializable {
         case Chunk(elems) => accL ++ Chunk(elems.take(rn))
         case Concat(left, right) =>
           if (rn > left.size) loop(right, rn - left.size, accL ++ left) else loop(left, rn, accL)
-        case bf: Buffer[A@unchecked] => loop(bf.unbuffer, rn, accL)
+        case bf: Buffer[A] => loop(bf.unbuffer, rn, accL)
         case Chunks(chunks) => loop(chunks, rn, accL)
       }
       loop(this, rn, TreeVector.empty)
@@ -102,25 +102,25 @@ abstract sealed class TreeVector[A] extends Serializable {
     * Note, that `:+`, `++` and `drop` on the result of call to `buffer` return another buffered vector.
     */
   final def bufferBy(chunkSize: Int): TreeVector[A] = this match {
-    case bf: Buffer[A@unchecked] => if (bf.lastChunk.length >= chunkSize) bf else bf.rebuffer(chunkSize)
-    case _ => Buffer(new AtomicLong(0), 0, this, new ArrayBuffer[A](chunkSize), 0)
+    case bf: Buffer[A] => if (bf.lastChunk.length >= chunkSize) bf else bf.rebuffer(chunkSize)
+    case _ => Buffer(new AtomicLong(0), 0, this, new Array[A](chunkSize), 0)
   }
 
   /** Collapse any buffered chunks at the end of this vector in an unbuffered vector.
     */
   def unbuffer: TreeVector[A] = this
 
-  def toArrayBuffer: ArrayBuffer[A] = {
-    val bf = new ArrayBuffer[A](size)
+  def toArrayBuffer: Array[A] = {
+    val bf = new Array[A](size)
     copyToBuffer(bf, 0)
     bf
   }
 
   final def copy: TreeVector[A] = Chunk(View(new AtArray(this.toArrayBuffer), 0, size))
 
-  final def copyToBuffer(bf: ArrayBuffer[A], start: Int): Unit = {
+  final def copyToBuffer(bf: Array[A], start: Int): Unit = {
     var i = start
-    foreachV { v => v.copyToBuffer(bf, i); i += v.size }
+    foreachV { v => v.copyToArray(bf, i); i += v.size }
   }
 
   protected def get0(index: Int): A
@@ -130,7 +130,7 @@ abstract sealed class TreeVector[A] extends Serializable {
       case Chunk(elems) :: tail => f(elems); loop(tail)
       case Concat(left, right) :: tail => loop(left :: right :: tail)
       case Chunks(Concat(left, right)) :: tail => loop(left :: right :: tail)
-      case (bf: Buffer[A@unchecked]) :: tail => loop(bf.unbuffer :: tail)
+      case (bf: Buffer[A]) :: tail => loop(bf.unbuffer :: tail)
       case Nil => ()
     }
     loop(this :: Nil)
@@ -145,51 +145,74 @@ object TreeVector {
 
   private[macaw] sealed abstract class At[+A] {
     def apply(index: Int): A
-    def copyToBuffer[B >: A](bf: ArrayBuffer[B], offset: Int, size: Int): Unit = ???
+    def copyToArray[B >: A](xs: Array[B], start: Int, offset: Int, size: Int): Unit = {
+      var i = 0
+      while (i < size) {
+        xs(start + i) = apply(offset + i)
+        i += 1
+      }
+    }
   }
 
   private object AtEmpty extends At[Nothing] {
     override def apply(index: Int) = throw new IllegalArgumentException("At empty view")
   }
 
-  private class AtArray[A](val arr: ArrayBuffer[A]) extends At[A] {
+  private class AtArray[A](val arr: Array[A]) extends At[A] {
     override def apply(index: Int): A = arr(index)
   }
 
   private[macaw] case class View[A](at: At[A], offset: Int, size: Int) {
     def apply(n: Int): A = at(offset + n)
-    def drop(n: Int): View[A] = ???
-    def take(n: Int): View[A] = ???
-    def copyToBuffer(bf: ArrayBuffer[A], start: Int): Unit = ???
+    def drop(n: Int): View[A] = if (n < 0) this else if (n >= size) View.empty else View(at, offset + n, size - n)
+    def take(n: Int): View[A] = if (n < 0) View.empty else if (n >= size) this else View(at, offset, n)
+    def copyToArray(xs: Array[A], start: Int): Unit = at.copyToArray(xs, start, offset, size)
   }
 
   private[macaw] object View {
     def empty[T]: View[T] = View[T](AtEmpty, 0, 0)
   }
 
-  private[macaw] case class Chunk[A](elems: View[A]) extends TreeVector[A] {
+  private[macaw] case class Chunk[A : ClassTag](elems: View[A]) extends TreeVector[A] {
     override def size: Int = elems.size
     override def get0(index: Int): A = elems(index)
   }
 
-  private[macaw] case class Concat[A](left: TreeVector[A], right: TreeVector[A]) extends TreeVector[A] {
+  private[macaw] case class Concat[A : ClassTag](left: TreeVector[A], right: TreeVector[A]) extends TreeVector[A] {
     override def size: Int = left.size + right.size
     override def get0(index: Int): A = if (index < left.size) left.get0(index) else right.get0(index - left.size)
   }
 
-  private[macaw] case class Chunks[A](chunks: Concat[A]) extends TreeVector[A] {
+  private[macaw] case class Chunks[A : ClassTag](chunks: Concat[A]) extends TreeVector[A] {
     override def size: Int = chunks.size
     override protected def get0(index: Int): A = chunks.get0(index)
+
+    override def ++(other: TreeVector[A]): TreeVector[A] =
+      if (other.isEmpty) this
+      else if (this.isEmpty) other
+      else {
+        def loop(leftChunks: Concat[A], last: TreeVector[A]): TreeVector[A] = {
+          val lastSize = last.size
+          if (lastSize >= leftChunks.size || lastSize * 2 <= leftChunks.right.size) Chunks(Concat(leftChunks, last))
+          else leftChunks.left match {
+            case left: Concat[A@unchecked] => loop(left, Concat(leftChunks.right, last))
+            case _ => Chunks(Concat(leftChunks, last))
+          }
+        }
+        loop(chunks, other.unbuffer) // unbuffer other vector in order to avoid proliferation of
+                                     // unused scratch space if other vector is buffer
+      }
   }
 
   /** Supports fast `:+` and `++` operations using an unobservable mutable
     * scratch array buffer at the end of the vector.
     */
-  private[macaw] case class Buffer[A](id: AtomicLong,
-                                      stamp: Long,
-                                      hd: TreeVector[A],
-                                      lastChunk: ArrayBuffer[A],
-                                      lastSize: Int) extends TreeVector[A] {
+  private[macaw] case class Buffer[A : ClassTag](id: AtomicLong,
+                                                 stamp: Long,
+                                                 hd: TreeVector[A],
+                                                 lastChunk: Array[A],
+                                                 lastSize: Int)
+    extends TreeVector[A] {
 
     override def size: Int = hd.size + lastSize
 
@@ -235,19 +258,19 @@ object TreeVector {
 
     def rebuffer(chunkSize: Int): TreeVector[A] = {
       require(chunkSize > lastChunk.length)
-      val newChunk = new ArrayBuffer[A](chunkSize)
-      lastChunk.copyToBuffer(newChunk)
+      val newChunk = new Array[A](chunkSize)
+      lastChunk.copyToArray(newChunk)
       Buffer(new AtomicLong(0), 0, hd, newChunk, lastSize)
     }
 
     def lastElems: TreeVector[A] = TreeVector.view(lastChunk).take(lastSize)
 
-    private def scratchSpaceCopy = Buffer(new AtomicLong(0), 0, unbuffer, new ArrayBuffer[A](lastChunk.length), 0)
+    private def scratchSpaceCopy = Buffer(new AtomicLong(0), 0, unbuffer, new Array[A](lastChunk.length), 0)
 
   }
 
-  def apply[T](elems: T*): TreeVector[T] = {
-    val bf = new ArrayBuffer[T](elems.size)
+  def apply[T : ClassTag](elems: T*): TreeVector[T] = {
+    val bf = new Array[T](elems.size)
     var i = 0
     elems.foreach { e =>
       bf(i) = e
@@ -256,8 +279,8 @@ object TreeVector {
     view(bf)
   }
 
-  def empty[T]: TreeVector[T] = Chunk[T](View.empty)
+  def empty[T : ClassTag]: TreeVector[T] = Chunk[T](View.empty)
 
-  def view[T](elems: ArrayBuffer[T]): TreeVector[T] = Chunk(View(new AtArray(elems), 0, elems.length))
+  def view[T : ClassTag](elems: Array[T]): TreeVector[T] = Chunk(View(new AtArray(elems), 0, elems.length))
 
 }
