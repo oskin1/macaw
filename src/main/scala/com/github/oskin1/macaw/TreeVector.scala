@@ -2,11 +2,11 @@ package com.github.oskin1.macaw
 
 import java.util.concurrent.atomic.AtomicLong
 
-import com.github.oskin1.macaw.TreeVector.{Buffer, Chunk, Chunks, Concat}
+import com.github.oskin1.macaw.TreeVector._
 
 import scala.collection.mutable.ArrayBuffer
 
-abstract sealed class TreeVector[+A] extends Serializable {
+abstract sealed class TreeVector[A] extends Serializable {
 
   /** Number of elements in this vector.
     */
@@ -43,23 +43,23 @@ abstract sealed class TreeVector[+A] extends Serializable {
 
   /** Returns vector with the element at the specified `index` replaced by the specified element `elem`.
     */
-  final def update[B >: A](index: Int, elem: B): TreeVector[B] = (take(index) :+ elem) ++ drop(index + 1)
+  final def update(index: Int, elem: A): TreeVector[A] = (take(index) :+ elem) ++ drop(index + 1)
 
   /** Returns vector with the specified element `elem` inserted at the specified `index`.
     */
-  final def insert[B >: A](index: Int, elem: B): TreeVector[B] = (take(index) :+ elem) ++ drop(index)
+  final def insert(index: Int, elem: A): TreeVector[A] = (take(index) :+ elem) ++ drop(index)
 
   /** Returns vector containing current vector contents followed by the `other`s vector contents.
     */
-  def ++[B >: A](other: TreeVector[B]): TreeVector[B] = if (isEmpty) other else Chunks(Concat(this, other)).bufferBy(64)
+  def ++(other: TreeVector[A]): TreeVector[A] = if (isEmpty) other else Chunks(Concat(this, other)).bufferBy(64)
 
   /** Return vector with the specified element `elem` prepended.
     */
-  def +:[B >: A](elem: B): TreeVector[B] = TreeVector(elem) ++ this
+  def +:(elem: A): TreeVector[A] = TreeVector(elem) ++ this
 
   /** Return vector with the specified element `elem` appended.
     */
-  def :+[B >: A](elem: B): TreeVector[B] = this ++ TreeVector(elem)
+  def :+(elem: A): TreeVector[A] = this ++ TreeVector(elem)
 
   /** Returns vector containing all elements except first `n`.
     */
@@ -110,9 +110,31 @@ abstract sealed class TreeVector[+A] extends Serializable {
     */
   def unbuffer: TreeVector[A] = this
 
-  final def copy: TreeVector[A] = ???
+  def toArrayBuffer: ArrayBuffer[A] = {
+    val bf = new ArrayBuffer[A](size)
+    copyToBuffer(bf, 0)
+    bf
+  }
+
+  final def copy: TreeVector[A] = Chunk(View(new AtArray(this.toArrayBuffer), 0, size))
+
+  final def copyToBuffer(bf: ArrayBuffer[A], start: Int): Unit = {
+    var i = start
+    foreachV { v => v.copyToBuffer(bf, i); i += v.size }
+  }
 
   protected def get0(index: Int): A
+
+  private final def foreachV(f: View[A] => Unit): Unit = {
+    def loop(rem: List[TreeVector[A]]): Unit = rem match {
+      case Chunk(elems) :: tail => f(elems); loop(tail)
+      case Concat(left, right) :: tail => loop(left :: right :: tail)
+      case Chunks(Concat(left, right)) :: tail => loop(left :: right :: tail)
+      case (bf: Buffer[A@unchecked]) :: tail => loop(bf.unbuffer :: tail)
+      case Nil => ()
+    }
+    loop(this :: Nil)
+  }
 
   private def validIndex(index: Int): Unit =
     if (index < 0 || index >= size) throw new IndexOutOfBoundsException(s"Invalid index: $index for vector of size: $size")
@@ -123,6 +145,7 @@ object TreeVector {
 
   private[macaw] sealed abstract class At[+A] {
     def apply(index: Int): A
+    def copyToBuffer[B >: A](bf: ArrayBuffer[B], offset: Int, size: Int): Unit = ???
   }
 
   private object AtEmpty extends At[Nothing] {
@@ -137,6 +160,7 @@ object TreeVector {
     def apply(n: Int): A = at(offset + n)
     def drop(n: Int): View[A] = ???
     def take(n: Int): View[A] = ???
+    def copyToBuffer(bf: ArrayBuffer[A], start: Int): Unit = ???
   }
 
   private[macaw] object View {
@@ -169,7 +193,39 @@ object TreeVector {
 
     override def size: Int = hd.size + lastSize
 
-    override def get0(index: Int): A = if (index < hd.size) hd.get0(index) else lastChunk(index - hd.size)
+    override def take(n: Int): TreeVector[A] =
+      if (n <= hd.size) hd.take(n)
+      else hd ++ lastElems.take(n - hd.size)
+
+    override def drop(n: Int): TreeVector[A] =
+      if (n <= hd.size) Buffer(id, stamp, hd.drop(n), lastChunk, lastSize)
+      else unbuffer.drop(n).bufferBy(lastChunk.length)
+
+    override def :+(elem: A): TreeVector[A] =
+      if (id.compareAndSet(stamp, stamp + 1) && lastSize < lastChunk.length) { // treads race to update buffer mutably.
+        lastChunk(lastSize) = elem
+        Buffer(id, stamp + 1, hd, lastChunk, lastSize + 1)
+      } else { // loser has to copy scratch space.
+        scratchSpaceCopy :+ elem
+      }
+
+    // if other vector fits in scratch space and is itself is a buffer then it will be unbuffered
+    // before being added in order to avoid proliferation of scratch space for small vectors.
+    override def ++(other: TreeVector[A]): TreeVector[A] =
+      if (other.isEmpty) this
+      else {
+        if (id.compareAndSet(stamp, stamp + 1) && (lastChunk.length - lastSize > other.size)) {
+          other.copyToBuffer(lastChunk, lastSize)
+          Buffer(id, stamp + 1, hd, lastChunk, lastSize + other.size)
+        } else {
+          if (lastSize == 0) Buffer(id, stamp, (hd ++ other).unbuffer, lastChunk, lastSize)
+          else scratchSpaceCopy ++ other
+        }
+      }
+
+    override def get0(index: Int): A =
+      if (index < hd.size) hd.get0(index)
+      else lastChunk(index - hd.size)
 
     override def unbuffer: TreeVector[A] = {
       // copy last chunk to a new vector if it is more than half unused to avoid proliferation of scratch space
@@ -185,6 +241,8 @@ object TreeVector {
     }
 
     def lastElems: TreeVector[A] = TreeVector.view(lastChunk).take(lastSize)
+
+    private def scratchSpaceCopy = Buffer(new AtomicLong(0), 0, unbuffer, new ArrayBuffer[A](lastChunk.length), 0)
 
   }
 
