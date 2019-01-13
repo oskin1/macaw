@@ -51,7 +51,7 @@ abstract sealed class TreeVector[A : ClassTag] extends Serializable {
 
   /** Returns vector containing current vector contents followed by the `other`s vector contents.
     */
-  def ++(other: TreeVector[A]): TreeVector[A] = if (isEmpty) other else Chunks(Concat(this, other)).bufferBy(64)
+  def ++(other: TreeVector[A]): TreeVector[A] = if (isEmpty) other else Chunks(Concat(this, other)).bufferBy(32)
 
   /** Return vector with the specified element `elem` prepended.
     */
@@ -110,17 +110,20 @@ abstract sealed class TreeVector[A : ClassTag] extends Serializable {
     */
   def unbuffer: TreeVector[A] = this
 
-  def toArrayBuffer: Array[A] = {
+  def toArray: Array[A] = {
     val bf = new Array[A](size)
     copyToBuffer(bf, 0)
     bf
   }
 
-  final def copy: TreeVector[A] = Chunk(View(new AtArray(this.toArrayBuffer), 0, size))
+  final def copy: TreeVector[A] = Chunk(View(new AtArray(this.toArray), 0, size))
 
   final def copyToBuffer(bf: Array[A], start: Int): Unit = {
     var i = start
-    foreachV { v => v.copyToArray(bf, i); i += v.size }
+    foreachV { v =>
+      v.copyToArray(bf, i)
+      i += v.size
+    }
   }
 
   protected def get0(index: Int): A
@@ -195,7 +198,7 @@ object TreeVector {
           val lastSize = last.size
           if (lastSize >= leftChunks.size || lastSize * 2 <= leftChunks.right.size) Chunks(Concat(leftChunks, last))
           else leftChunks.left match {
-            case left: Concat[A@unchecked] => loop(left, Concat(leftChunks.right, last))
+            case left: Concat[A] => loop(left, Concat(leftChunks.right, last))
             case _ => Chunks(Concat(leftChunks, last))
           }
         }
