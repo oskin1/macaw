@@ -69,7 +69,7 @@ abstract sealed class TreeVector[A : ClassTag] extends Serializable {
     else if (rn == 0) this
     else {
       def loop(cur: TreeVector[A], rn: Int, accR: List[TreeVector[A]]): TreeVector[A] = cur match {
-        case Chunk(elems) => accR.foldLeft(Chunk(elems.drop(rn)): TreeVector[A])(_ ++ _)
+        case Chunk(elems) => accR.foldLeft[TreeVector[A]](Chunk(elems.drop(rn)))(_ ++ _)
         case Concat(left, right) =>
           if (rn > left.size) loop(right, rn - left.size, accR) else loop(left, rn, right :: accR)
         case bf: Buffer[A] =>
@@ -272,6 +272,8 @@ object TreeVector {
 
   }
 
+  /** Constructs a [[TreeVector]] from a list elements.
+    */
   def apply[T : ClassTag](elems: T*): TreeVector[T] = {
     val bf = new Array[T](elems.size)
     var i = 0
@@ -281,6 +283,10 @@ object TreeVector {
     }
     view(bf)
   }
+
+  /** Constructs a [[TreeVector]] from a collection of elements.
+    */
+  def apply[T : ClassTag](elems: Seq[T]): TreeVector[T] = apply(elems:_*)
 
   def empty[T : ClassTag]: TreeVector[T] = Chunk[T](View.empty)
 
