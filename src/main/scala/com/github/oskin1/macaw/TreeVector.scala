@@ -111,17 +111,17 @@ abstract sealed class TreeVector[A : ClassTag] extends Serializable {
   def unbuffer: TreeVector[A] = this
 
   def toArray: Array[A] = {
-    val bf = new Array[A](size)
-    copyToBuffer(bf, 0)
-    bf
+    val xs = new Array[A](size)
+    copyToArray(xs, 0)
+    xs
   }
 
   final def copy: TreeVector[A] = Chunk(View(new AtArray(this.toArray), 0, size))
 
-  final def copyToBuffer(bf: Array[A], start: Int): Unit = {
+  final def copyToArray(xs: Array[A], start: Int): Unit = {
     var i = start
     foreachV { v =>
-      v.copyToArray(bf, i)
+      v.copyToArray(xs, i)
       i += v.size
     }
   }
@@ -241,7 +241,7 @@ object TreeVector {
       if (other.isEmpty) this
       else {
         if (id.compareAndSet(stamp, stamp + 1) && (lastChunk.length - lastSize > other.size)) {
-          other.copyToBuffer(lastChunk, lastSize)
+          other.copyToArray(lastChunk, lastSize)
           Buffer(id, stamp + 1, hd, lastChunk, lastSize + other.size)
         } else {
           if (lastSize == 0) Buffer(id, stamp, (hd ++ other).unbuffer, lastChunk, lastSize)
