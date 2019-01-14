@@ -284,10 +284,6 @@ object TreeVector {
     view(bf)
   }
 
-  /** Constructs a [[TreeVector]] from a collection of elements.
-    */
-  def apply[T : ClassTag](elems: Seq[T]): TreeVector[T] = apply(elems:_*)
-
   def empty[T : ClassTag]: TreeVector[T] = Chunk[T](View.empty)
 
   def view[T : ClassTag](elems: Array[T]): TreeVector[T] = Chunk(View(new AtArray(elems), 0, elems.length))
