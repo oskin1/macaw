@@ -24,7 +24,7 @@ object TreeVectorBench extends Bench.ForkedTime {
       using(values) config(config: _*) in { vals =>
         var vec = TreeVector.empty[Int]
         vals.foreach { v =>
-          vec = vec :+ v
+          vec = v +: vec
         }
       }
     }
@@ -32,7 +32,7 @@ object TreeVectorBench extends Bench.ForkedTime {
       using(values) config(config: _*) in { vals =>
         var vec = Vector.empty[Int]
         vals.foreach { v =>
-          vec = vec :+ v
+          vec = v +: vec
         }
       }
     }
