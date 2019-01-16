@@ -19,8 +19,16 @@ object TreeVectorBench extends Bench.ForkedTime {
     exec.requireGC -> true
   )
 
-  performance of "TreeVector vs Vector" in {
-    performance of "TreeVector.append" in {
+  performance of "TreeVector" in {
+    performance of "append" in {
+      using(values) config(config: _*) in { vals =>
+        var vec = TreeVector.empty[Int]
+        vals.foreach { v =>
+          vec = vec :+ v
+        }
+      }
+    }
+    performance of "prepend" in {
       using(values) config(config: _*) in { vals =>
         var vec = TreeVector.empty[Int]
         vals.foreach { v =>
@@ -28,11 +36,11 @@ object TreeVectorBench extends Bench.ForkedTime {
         }
       }
     }
-    performance of "Vector.append" in {
+    performance of "concat" in {
       using(values) config(config: _*) in { vals =>
-        var vec = Vector.empty[Int]
+        var vec = TreeVector.empty[Int]
         vals.foreach { v =>
-          vec = v +: vec
+          vec = vec ++ TreeVector(v)
         }
       }
     }
