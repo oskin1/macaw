@@ -4,17 +4,26 @@ object deps {
 
   import versions._
 
-  lazy val testingDeps = Seq(
+  lazy val testing = Seq(
     "org.scalatest"  %% "scalatest"  % "3.0.+"  % "test",
     "org.scalacheck" %% "scalacheck" % "1.14.+" % "test"
   )
 
-  lazy val catsDeps = Seq(
+  lazy val cats = Seq(
     "org.typelevel" %% "cats-core"           % CatsVersion,
     "org.typelevel" %% "cats-effect"         % CatsEffectVersion,
     "org.typelevel" %% "cats-mtl-core"       % CatsMtlVersion,
     "org.typelevel" %% "cats-tagless-macros" % CatsTaglessVersion,
     "org.typelevel" %% "cats-tagless-core"   % CatsTaglessVersion,
+  )
+
+  lazy val monix = Seq(
+    "io.monix" %% "monix" % Monix
+  )
+
+  lazy val zio = Seq(
+    "dev.zio" %% "zio" % "1.0.0-RC15",
+    "dev.zio" %% "zio-interop-cats" % "2.0.0.0-RC9"
   )
 
   lazy val simulacrum = Seq(

@@ -15,23 +15,27 @@ lazy val macaw = project
 lazy val core = utils
   .mkModule("macaw-core", "MacawCore")
   .settings(commonSettings)
-  .settings(libraryDependencies ++= deps.catsDeps ++ deps.simulacrum ++ deps.testingDeps)
+  .settings(
+    libraryDependencies ++= deps.cats ++ deps.simulacrum ++ deps.testing ++ deps.compilerPlugins
+  )
 
 lazy val data = utils
   .mkModule("macaw-data", "MacawData")
   .settings(commonSettings)
-  .settings(libraryDependencies ++= deps.testingDeps)
+  .settings(libraryDependencies ++= deps.testing)
 
 lazy val demo = utils
   .mkModule("demo", "Demo")
   .settings(commonSettings)
-  .settings(libraryDependencies ++= deps.testingDeps)
+  .settings(
+    libraryDependencies ++= deps.cats ++ deps.zio ++ deps.monix ++ deps.testing ++ deps.compilerPlugins
+  )
+  .dependsOn(core, data)
 
 lazy val commonScalacOptions = List(
   "-deprecation",
   "-feature",
   "-Xfatal-warnings",
-  "-Ypartial-unification",
   "-language:higherKinds",
   "-language:existentials",
   "-language:implicitConversions"

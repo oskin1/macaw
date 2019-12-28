@@ -6,4 +6,5 @@ object versions {
   val CatsTaglessVersion = "0.10"
   val KindProjector      = "0.11.0"
   val SimulacrumVersion  = "0.19.0"
+  val Monix              = "3.0.0"
 }
