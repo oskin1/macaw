@@ -1,36 +1,38 @@
-name := "macaw"
-
-version := "0.1.0"
-
-scalaVersion := "2.12.8"
-
-organization := "com.github.oskin1"
-
-libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "3.0.+" % "test",
-  "org.scalacheck" %% "scalacheck" % "1.14.+" % "test",
-  "com.storm-enroute" %% "scalameter" % "0.8.+" % "test"
+lazy val commonSettings = Seq(
+  scalacOptions ++= commonScalacOptions,
+  organization := "com.github.oskin1",
+  scalaVersion := "2.13.1",
+  version := "0.1.0"
 )
 
-licenses in ThisBuild := Seq("GNU GPL 3.0" -> url("https://github.com/oskin1/macaw/blob/master/LICENSE"))
+lazy val macaw = project
+  .in(file("."))
+  .withId("macaw")
+  .settings(commonSettings)
+  .settings(moduleName := "macaw", name := "Macaw")
+  .aggregate(core, data, demo)
 
-homepage in ThisBuild := Some(url("https://github.com/oskin1/macaw"))
+lazy val core = utils
+  .mkModule("macaw-core", "MacawCore")
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= deps.catsDeps ++ deps.simulacrum ++ deps.testingDeps)
 
-publishMavenStyle in ThisBuild := true
+lazy val data = utils
+  .mkModule("macaw-data", "MacawData")
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= deps.testingDeps)
 
-publishArtifact in Test := false
+lazy val demo = utils
+  .mkModule("demo", "Demo")
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= deps.testingDeps)
 
-publishTo in ThisBuild :=
-  Some(if (isSnapshot.value) Opts.resolver.sonatypeSnapshots else Opts.resolver.sonatypeStaging)
-
-pomExtra in ThisBuild :=
-  <scm>
-    <url>git@github.com:oskin1/macaw.git</url>
-    <connection>scm:git:git@github.com:oskin1/macaw.git</connection>
-  </scm>
-    <developers>
-      <developer>
-        <id>Oskin1</id>
-        <name>Ilya Oskin</name>
-      </developer>
-    </developers>
+lazy val commonScalacOptions = List(
+  "-deprecation",
+  "-feature",
+  "-Xfatal-warnings",
+  "-Ypartial-unification",
+  "-language:higherKinds",
+  "-language:existentials",
+  "-language:implicitConversions"
+)

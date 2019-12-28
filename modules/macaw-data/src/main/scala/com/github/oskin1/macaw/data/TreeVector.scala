@@ -1,8 +1,8 @@
-package com.github.oskin1.macaw
+package com.github.oskin1.macaw.data
 
 import java.util.concurrent.atomic.AtomicLong
 
-import com.github.oskin1.macaw.TreeVector._
+import com.github.oskin1.macaw.data.TreeVector._
 
 import scala.reflect.ClassTag
 
@@ -203,7 +203,7 @@ object TreeVector {
           }
         }
         loop(chunks, other.unbuffer) // unbuffer other vector in order to avoid proliferation of
-                                     // unused scratch space if other vector is buffer
+        // unused scratch space if other vector is buffer
       }
   }
 
