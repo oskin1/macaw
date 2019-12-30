@@ -2,7 +2,6 @@ package com.github.oskin1.macaw.core
 
 import cats.ApplicativeError
 import cats.mtl.ApplicativeHandle
-import cats.syntax.applicativeError._
 
 /** A type class allowing to signal business errors of type `E`.
   */
@@ -22,7 +21,7 @@ object Raise2 {
     E <: Throwable
   ](implicit F: ApplicativeError[F[E, *], Throwable]): Raise2[F, E] =
     new Raise2[F, E] {
-      def raise[A, E1 >: E <: Throwable](e: E1): F[E, A] = e.raiseError
+      def raise[A, E1 >: E <: Throwable](e: E1): F[E, A] = F.raiseError(e)
     }
 
   implicit def instance[
