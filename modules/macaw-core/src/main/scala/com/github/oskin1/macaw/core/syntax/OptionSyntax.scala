@@ -26,7 +26,7 @@ object OptionSyntax {
     ): F[E, A] =
       oa match {
         case Some(value) => A.pure(value)
-        case None        => F.raise[A](ifEmpty)
+        case None        => F.raise[A, E](ifEmpty)
       }
   }
 
