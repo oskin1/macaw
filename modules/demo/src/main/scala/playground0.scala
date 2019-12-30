@@ -1,7 +1,10 @@
+import cats.Applicative
 import cats.mtl.FunctorRaise
+import cats.syntax.option._
 import com.github.oskin1.macaw.core.Raise2
 import zio.DefaultRuntime
 import zio.interop.catz._
+import com.github.oskin1.macaw.core.syntax.option._
 
 object playground0 extends App {
 
@@ -9,17 +12,27 @@ object playground0 extends App {
 
   abstract class Err(m: String) extends Exception(m)
   final case class BusinessErr(msg: String) extends Err(msg)
+  abstract class ErrSubtype(m: String) extends Err(m)
+  final case class BusinessErrSub(msg: String) extends ErrSubtype(msg)
 
-  trait MyService[D[+ _, + _]] {
+  trait MyService[F[+ _, + _]] {
 
-    def fn0: D[Err, Int]
+    def method0: F[Err, Int]
+
+    def method1: F[Err, Int]
   }
 
-  final class MyServiceImpl[D[+ _, + _]: Raise2[*[_, _], Err]]
-    extends MyService[D] {
+  final class MyServiceImpl[F[+ _, + _]](
+    implicit
+    F: Raise2[F, Err],
+    A: Applicative[F[Err, *]]
+  ) extends MyService[F] {
 
-    def fn0: D[Err, Int] =
-      Raise2[D, Err].raise(BusinessErr("Boom!"))
+    def method0: F[Err, Int] =
+      none[Int].liftTo2[F, Err](BusinessErr("Boom!"))
+
+    def method1: F[Err, Int] =
+      Raise2[F, Err].raise(BusinessErrSub("Boom!"))
   }
 
   implicit def apHandleIO: FunctorRaise[zio.IO[Err, *], Err] =
@@ -27,7 +40,7 @@ object playground0 extends App {
 
   val service = new MyServiceImpl[zio.IO]
 
-  runtime.unsafeRun(service.fn0.catchAll { e =>
+  runtime.unsafeRun(service.method0.catchAll { e =>
     zio.IO.effectTotal(println(s"Caught: ${e.getMessage}"))
   })
 }
