@@ -5,9 +5,9 @@ import cats.mtl.ApplicativeHandle
 
 /** A type class allowing to signal business errors of type `E`.
   */
-trait Raise2[F[+ _, + _], +E <: Throwable] {
+trait Raise2[F[+ _, + _], E <: Throwable] {
 
-  def raise[A, E1 >: E <: Throwable](e: E1): F[E, A]
+  def raise[A](e: E): F[E, A]
 }
 
 object Raise2 {
@@ -21,7 +21,7 @@ object Raise2 {
     E <: Throwable
   ](implicit F: ApplicativeError[F[E, *], Throwable]): Raise2[F, E] =
     new Raise2[F, E] {
-      def raise[A, E1 >: E <: Throwable](e: E1): F[E, A] = F.raiseError(e)
+      def raise[A](e: E): F[E, A] = F.raiseError(e)
     }
 
   implicit def instance[
@@ -29,16 +29,16 @@ object Raise2 {
     E <: Throwable
   ](implicit F: ApplicativeHandle[F[E, *], Throwable]): Raise2[F, E] =
     new Raise2[F, E] {
-      def raise[A, E1 >: E <: Throwable](e: E1): F[E, A] = F.raise(e)
+      def raise[A](e: E): F[E, A] = F.raise(e)
     }
 
   object syntax {
 
     implicit class RaiseOps[
       F[+ _, + _],
-      +E <: Throwable
+      E <: Throwable
     ](e: E)(implicit F: Raise2[F, E]) {
-      def raise[A, E1 >: E <: Throwable](e: E1): F[E, A] = Raise2[F, E].raise[A, E1](e)
+      def raise[A](e: E): F[E, A] = Raise2[F, E].raise[A](e)
     }
   }
 }
