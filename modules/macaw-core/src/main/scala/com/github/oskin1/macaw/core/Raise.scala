@@ -5,14 +5,24 @@ import cats.syntax.applicativeError._
 
 /** A type class allowing to signal business errors of type `E`.
   */
-trait Raise[F[_], -E <: Throwable] {
+trait Raise[F[_], -E] {
 
   def raise[A](e: E): F[A]
 }
 
 object Raise {
 
-  def apply[F[_], E <: Throwable](
+  trait Infallible[F[_]] extends Raise[F, Nothing]
+
+  object Infallible {
+
+    implicit def instance[F[_]]: Infallible[F] =
+      new Infallible[F] {
+        override def raise[A](e: Nothing): F[A] = e
+      }
+  }
+
+  def apply[F[_], E](
     implicit ev: Raise[F, E]
   ): Raise[F, E] = ev
 
@@ -28,7 +38,7 @@ object Raise {
 
     implicit class RaiseOps[
       F[_]: Raise[*[_], E],
-      E <: Throwable
+      E
     ](e: E) {
       def raise[A]: F[A] = Raise[F, E].raise[A](e)
     }

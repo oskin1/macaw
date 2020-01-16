@@ -15,6 +15,11 @@ object deps {
     "org.typelevel" %% "cats-mtl-core"       % CatsMtlVersion,
     "org.typelevel" %% "cats-tagless-macros" % CatsTaglessVersion,
     "org.typelevel" %% "cats-tagless-core"   % CatsTaglessVersion,
+    "com.olegpy"    %% "meow-mtl-core"       % CatsMeowMtl,
+  )
+
+  lazy val tofu = Seq(
+    "ru.tinkoff" %% "tofu-core" % Tofu
   )
 
   lazy val monix = Seq(
@@ -22,7 +27,7 @@ object deps {
   )
 
   lazy val zio = Seq(
-    "dev.zio" %% "zio" % "1.0.0-RC15",
+    "dev.zio" %% "zio"              % "1.0.0-RC15",
     "dev.zio" %% "zio-interop-cats" % "2.0.0.0-RC9"
   )
 

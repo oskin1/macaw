@@ -28,7 +28,7 @@ lazy val demo = utils
   .mkModule("demo", "Demo")
   .settings(commonSettings)
   .settings(
-    libraryDependencies ++= deps.cats ++ deps.zio ++ deps.monix ++ deps.testing ++ deps.compilerPlugins
+    libraryDependencies ++= deps.cats ++ deps.tofu ++ deps.zio ++ deps.monix ++ deps.testing ++ deps.compilerPlugins
   )
   .dependsOn(core, data)
 
